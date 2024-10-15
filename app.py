@@ -1,27 +1,29 @@
-#imports for UI and model 
+#Import for User Interface
 import streamlit as st
+
+#Import for model and responses
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.chat_models import ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 
-#imports for file upload and text extration + splitting
+#Import for PDF text extraction and splitting
 from langchain_community.document_loaders import PyMuPDFLoader
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-#imports for vector database and embeddings
+#Import for vector database and embeddings
 import os
-import faiss
 from langchain_community.embeddings.ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from uuid import uuid4
 from langchain_core.documents import Document
 
-#import for RAG reranking
-import time
-from rerankers import Reranker
 
+###########################
+
+
+#Initialising UI
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -29,82 +31,45 @@ st.set_page_config(page_title="Study AI")
 
 st.title("Study AI")
 
-few_shot_example = """
-For example, the question will be as follows: "What happened at Interleaf and Viaweb?"
 
-The output will be as follows:
-
-1. What were the major events or milestones in the history of Interleaf and Viaweb?
-2. Who were the founders and key figures involved in the development of Interleaf and Viaweb?
-3. What were the products or services offered by Interleaf and Viaweb?
-4. Are there any notable success stories or failures associated with Interleaf and Viaweb?
-"""
-query_writing_str = """You are a helpful assistant that generates multiple search queries based on a \
-single input query. A high school student will be asking questions. 
-Generate {num_queries} search queries, one on each line, \
-related to the following input query:
-Query: {query}
-Queries:
-
-Only respond with the generated questions adding no extra words in the response.
-"""
-
-query_gen_prompt = ChatPromptTemplate.from_template(query_writing_str + few_shot_example)
+#Initialising LLM 
 llm = ChatOllama(model="llama3")
 
-def generate_queries(query: str, llm, num_queries: int = 4):
-    chain = query_gen_prompt | llm | StrOutputParser()
+#Initialising the Embedding model
+embedding_model = OllamaEmbeddings(model='nomic-embed-text')
+
+#Rewrite-Retrieve-Read Implementation
+def rewrite_query(query: str):
+
+    query_rewriting_str = """
+    You are an expert at reformulating questions. \
+    Your reforulated questions are understandable and suitable for final year high students and teachers.
+    The question you reformulate will begin and end with with ’**’. 
+    
+    Question: 
+    {question} 
+
+    Only reply using a complete sentence and only give the answer in the following format:
+    **Question**"""
+
+    query_rewriting_prompt = ChatPromptTemplate.from_template(query_rewriting_str)
+
+    chain = query_rewriting_prompt | llm | StrOutputParser()
+
     response = chain.invoke({
-        "query": query,
-        "num_queries": num_queries
+        "question" : query
     })
+
     print(response)
-    queries = response.split("\n")
-    queries_str = "\n".join(queries[2:])
-    print(f"Generated queries:\n {queries_str}")
-    return queries_str[0]
 
-### inputs chain with chat_history, query and context (includes the template used)
-def get_response(query, chat_history, context):
-    template = """
-    You are an assistant for question-answering tasks.
-
-    Use the following documents and the chat history to answer the question.
-
-    Do not use any knowledge you already know.
-
-    If you don't know the answer, just say you don't know.
-
-    Chat history: {chat_history}
-
-    User question: {user_questions}
-
-    Documents: {documents}
-
-    Answer:
-    """
-
-    prompt = ChatPromptTemplate.from_template(template)
-
-    llm = ChatOllama(model="llama3")
-
-    chain = prompt | llm | StrOutputParser()
-
-    return chain.invoke({
-        "chat_history" : chat_history,
-        "user_questions" : query,
-        "documents" : context
-    })
+    return response 
 
 def get_response(query, context):
-    template = """
+    qa_template = """
     You are an assistant for question-answering tasks.
 
-    Use the following documents and the chat history to answer the question.
-
-    Do not use any knowledge you already know.
-
-    If you don't know the answer, just say you don't know.
+    Use the following documents that is retrieved from the databse is relevant \
+    use it to answer the question answer the question.
 
     User question: {user_questions}
 
@@ -113,23 +78,22 @@ def get_response(query, context):
     Answer:
     """
 
-    prompt = ChatPromptTemplate.from_template(template)
+    qa_prompt = ChatPromptTemplate.from_template(qa_template)
 
     llm = ChatOllama(model="llama3")
 
-    chain = prompt | llm | StrOutputParser()
+    chain = qa_prompt | llm | StrOutputParser()
 
     return chain.invoke({
         "user_questions" : query,
         "documents" : context
     })
 
-### VERSION using PdfReader
-#function that extracts the text from the input pdf
-def get_pdf_text(pdf_docs):
+#Function that extracts the text form the PDFs uploaded
+def get_pdf_text(pdf):
     text=""
     count = 0
-    for pdf in pdf_docs:
+    for pdf in pdf:
         count += 1
         print(count)
         pdf_reader = PdfReader(pdf)
@@ -137,7 +101,7 @@ def get_pdf_text(pdf_docs):
             text += page.extract_text()
     return text
 
-#splits the text into chunks that can be embedded
+#Function that splits the text into chunks for the embedding function
 def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -148,11 +112,7 @@ def get_text_chunks(text):
     chunks = text_splitter.split_text(text)
     return chunks
 
-#laods the embedding model
-def create_embeddings():
-    return OllamaEmbeddings(model='nomic-embed-text')
-
-#creates a vector database (if not already existing) 
+#Function that loads or creates a vector store
 def create_or_load_vector_store(embeddings, store_name):
     persistent_directory = os.path.join(r"C:\Users\KD\Desktop\hsc llm", store_name)
     if not os.path.exists(persistent_directory):
@@ -166,41 +126,32 @@ def create_or_load_vector_store(embeddings, store_name):
         )
     return vector_store
 
-###VERSION 1
-#converts the documents into Document type and primary ID for to add to the vector databse
-def add_new_docs(pdf_docs):
-    raw_text = get_pdf_text(pdf_docs)
-    chunks = get_text_chunks(raw_text)
-    documents = [Document(page_content=text) for text in chunks]
-    uuids = [str(uuid4()) for _ in range(len(chunks))]
-    return documents, uuids
+vector_store = create_or_load_vector_store(embedding_model, "chroma_db")
 
-#retrieves the most relevant data from vector database
+#Function that adds the documents to the vector store
+def add_new_docs(pdf):
+    text = get_pdf_text(pdf)
+    chunks = get_text_chunks(text)
+    documents = [Document(page_context=text) for text in chunks]
+    uuids = [str(uuid4()) for _ in range(len(chunks))]
+    vector_store.add_documents(documents=documents, ids=uuids)
+
+#Function that retrieves the most relevant data from vector database
 def perform_retrieval(vector_store, query, k=5):
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": k})
-    # retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={'k':5, 'fetch_k':10})
     results = retriever.invoke(query)
     print(results)
     return results
 
-import yake
-
 def main():
-    #initialises the vector database
-    vector_store = create_or_load_vector_store(create_embeddings(), "chroma_db")
-    
     #sidebar section that includes the file upload for RAG
     with st.sidebar:
         st.sidebar.title("Upload a file")
         pdf_docs = st.file_uploader("Upload your notes", accept_multiple_files=True, key="pdf_uploader")
-        # pdf_docs = st.file_uploader("Upload your notes", accept_multiple_files=False, key="pdf_uploader")
         if st.button("Upload", key="process_button"):
             with st.spinner("Processing..."):
-                document, uuids = add_new_docs(pdf_docs)
-                vector_store.add_documents(documents=document, ids=uuids)
-                
+                add_new_docs(pdf_docs)
                 st.success("Done!")
-
 
     #conversation section
     for message in st.session_state.chat_history:
@@ -210,7 +161,8 @@ def main():
         else:
             with st.chat_message("AI"):
                 st.markdown(message.content)
-    #user input
+
+    #user input 
     user_query = st.chat_input("Your message")
 
     if user_query is not None and user_query != "":
@@ -219,51 +171,14 @@ def main():
         with st.chat_message("Human"):
             st.markdown(user_query)
 
-        # with st.chat_message("AI"):
-        ### testing query rewriter
-            # ai_response = generate_queries(user_query, llm=llm)
-            # st.markdown(ai_response)
-            
-        # #retrieves AI response with the user query, the chat history and also the relevant data from the RAG process
+        #Testing the LLM rewriter with refined prompt query for high school teacher / student
         with st.chat_message("AI"):
-            ai_response = get_response(user_query, st.session_state.chat_history, perform_retrieval(vector_store,user_query))
+            ai_response = rewrite_query(user_query)
             st.markdown(ai_response)
 
-            # ai_response = st.write_stream(get_response(user_query, st.session_state.chat_history))
-
-        #implementing query rewriter in response
+        #Testing a simple similarity search with AI answer rewriting
         with st.chat_message("AI"):
-            rewritten_query = generate_queries(user_query, llm)
-            ai_response = get_response(rewritten_query, st.session_state.chat_history, perform_retrieval(vector_store,rewritten_query))
-            st.markdown(ai_response)
-
-
-        #implementing yake answer
-        with st.chat_message("AI"):
-            kw_extractor = yake.KeywordExtractor()
-            keywords = kw_extractor.extract_keywords(user_query)
-            ai_response = get_response(user_query, st.session_state.chat_history, perform_retrieval(vector_store, keywords[0][0]))  
-            st.markdown(ai_response)
-
-                    # #retrieves AI response with the user query, the chat history and also the relevant data from the RAG process
-        with st.chat_message("AI"):
-            ai_response = get_response(user_query, perform_retrieval(vector_store,user_query))
-            st.markdown(ai_response)
-
-            # ai_response = st.write_stream(get_response(user_query, st.session_state.chat_history))
-
-        #implementing query rewriter in response
-        with st.chat_message("AI"):
-            rewritten_query = generate_queries(user_query, llm)
-            ai_response = get_response(rewritten_query, perform_retrieval(vector_store,rewritten_query))
-            st.markdown(ai_response)
-
-
-        #implementing yake answer
-        with st.chat_message("AI"):
-            kw_extractor = yake.KeywordExtractor()
-            keywords = kw_extractor.extract_keywords(user_query)
-            ai_response = get_response(user_query, perform_retrieval(vector_store, keywords[0][0]))  
+            ai_response = get_response(user_query, perform_retrieval(vector_store, user_query))
             st.markdown(ai_response)
 
         st.session_state.chat_history.append(AIMessage(ai_response))
@@ -271,7 +186,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-        
