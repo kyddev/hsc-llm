@@ -19,6 +19,9 @@ from langchain_chroma import Chroma
 from uuid import uuid4
 from langchain_core.documents import Document
 
+#Import for keyword extraction
+import yake
+
 
 ###########################
 
@@ -31,19 +34,22 @@ st.set_page_config(page_title="Study AI")
 
 st.title("Study AI")
 
-
 #Initialising LLM 
 llm = ChatOllama(model="llama3")
 
 #Initialising the Embedding model
 embedding_model = OllamaEmbeddings(model='nomic-embed-text')
 
+#Initialising the keyword extraction model
+kw_extractor = yake.KeywordExtractor()
+language = "en"
+
 #Rewrite-Retrieve-Read Implementation
 def rewrite_query(query: str):
 
     query_rewriting_str = """
     You are an expert at reformulating questions. \
-    Your reforulated questions are understandable and suitable for final year high students and teachers.
+    Your reformulated questions are understandable for high students and teachers.
     The question you reformulate will begin and end with with ’**’. 
     
     Question: 
@@ -64,12 +70,19 @@ def rewrite_query(query: str):
 
     return response 
 
+def get_keywords(rewritten_query):
+    keywords = kw_extractor.extract_keywords(rewritten_query)
+    for kw in keywords:
+        print(kw)
+
 def get_response(query, context):
     qa_template = """
     You are an assistant for question-answering tasks.
 
-    Use the following documents that is retrieved from the databse is relevant \
+    Use the following documents that is retrieved from the database is relevant \
     use it to answer the question answer the question.
+
+    If the documents provided are not relevant to the question, use your own knowledge to answer.
 
     User question: {user_questions}
 
@@ -176,7 +189,14 @@ def main():
             ai_response = rewrite_query(user_query)
             st.markdown(ai_response)
 
-        #Testing a simple similarity search with AI answer rewriting
+        #Testing the LLM rewriter in similarity search WITH AI answer rewriting
+        with st.chat_message("AI"):  
+            reworded_query = rewrite_query(user_query)        
+            get_keywords(reworded_query)
+            test_response = get_response(reworded_query, perform_retrieval(vector_store, reworded_query))
+            st.markdown(test_response)
+
+        #Testing a simple similarity search WITHOUT AI answer rewriting
         with st.chat_message("AI"):
             ai_response = get_response(user_query, perform_retrieval(vector_store, user_query))
             st.markdown(ai_response)
