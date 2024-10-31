@@ -9,7 +9,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 #Import for PDF text extraction and splitting
 from langchain_community.document_loaders import PyMuPDFLoader
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 #Import for vector database and embeddings
@@ -22,6 +22,9 @@ from langchain_core.documents import Document
 #Import for keyword extraction
 import yake
 
+#Import for relative current working directory
+import os
+import sys
 
 ###########################
 
@@ -43,6 +46,9 @@ embedding_model = OllamaEmbeddings(model='nomic-embed-text')
 #Initialising the keyword extraction model
 kw_extractor = yake.KeywordExtractor()
 language = "en"
+
+#Initialising Current Working Directory
+app_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 #Rewrite-Retrieve-Read Implementation
 def rewrite_query(query: str):
@@ -127,7 +133,7 @@ def get_text_chunks(text):
 
 #Function that loads or creates a vector store
 def create_or_load_vector_store(embeddings, store_name):
-    persistent_directory = os.path.join(r"C:\Users\KD\Desktop\hsc llm", store_name)
+    persistent_directory = os.path.join(app_dir, store_name)
     if not os.path.exists(persistent_directory):
         print("creating vector store")
         vectore_store = Chroma.from_documents(embeddings, persist_directory=persistent_directory)
