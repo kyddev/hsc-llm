@@ -74,6 +74,7 @@ def get_keywords(rewritten_query):
     keywords = kw_extractor.extract_keywords(rewritten_query)
     for kw in keywords:
         print(kw)
+    return keywords
 
 def get_response(query, context):
     qa_template = """
@@ -132,7 +133,7 @@ def create_or_load_vector_store(embeddings, store_name):
         print("creating vector store")
         vectore_store = Chroma.from_documents(embeddings, persist_directory=persistent_directory)
     else:
-        print("loading existing vectore store")
+        print("loading existing vector store")
         vector_store = Chroma(
         persist_directory=persistent_directory,
         embedding_function=embeddings
@@ -194,6 +195,14 @@ def main():
             reworded_query = rewrite_query(user_query)        
             get_keywords(reworded_query)
             test_response = get_response(reworded_query, perform_retrieval(vector_store, reworded_query))
+            st.markdown(test_response)
+
+        #Testing the LLM rewriter in similarity search WITH AI answer rewriting AND keyword extraction retrieval
+        with st.chat_message("AI"):
+            reworded_query = rewrite_query(user_query)
+            kws = get_keywords(reworded_query)
+            print(kws[0])
+            test_response = get_response(reworded_query, perform_retrieval(vector_store, kws[0]))
             st.markdown(test_response)
 
         #Testing a simple similarity search WITHOUT AI answer rewriting
