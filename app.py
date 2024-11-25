@@ -50,6 +50,7 @@ language = "en"
 #Initialising Current Working Directory
 app_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 
+
 #Rewrite-Retrieve-Read Implementation
 def rewrite_query(query: str):
 
@@ -87,9 +88,12 @@ def get_response(query, context):
     You are an assistant for question-answering tasks.
 
     Use the following documents that is retrieved from the database is relevant \
-    use it to answer the question answer the question.
+    use it to provide a complete and concise response to the user's query. \
+    Do not mention references, sources, or citations in your response
 
     If the documents provided are not relevant to the question, use your own knowledge to answer.
+
+    Limit your answer to 3-4 sentences.
 
     User question: {user_questions}
 
@@ -137,7 +141,7 @@ def create_or_load_vector_store(embeddings, store_name):
     persistent_directory = os.path.join(app_dir, store_name)
     if not os.path.exists(persistent_directory):
         print("creating vector store")
-        vectore_store = Chroma.from_documents(embeddings, persist_directory=persistent_directory)
+        vector_store = Chroma.from_documents(embeddings, persist_directory=persistent_directory)
     else:
         print("loading existing vector store")
         vector_store = Chroma(
@@ -190,6 +194,7 @@ def main():
 
         with st.chat_message("Human"):
             st.markdown(user_query)
+            print(app_dir)
 
         #Testing the LLM rewriter with refined prompt query for high school teacher / student
         with st.chat_message("AI"):
