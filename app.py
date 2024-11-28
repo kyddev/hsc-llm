@@ -5,17 +5,17 @@ import chromadb
 import ollama
 import streamlit as st
 
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from pypdf import PdfReader
 import ollama
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import CrossEncoder
 from streamlit.runtime.uploaded_file_manager import UploadedFile
-from langchain_community.chat_models import ChatOllama
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_community.embeddings.ollama import OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_core.output_parsers import StrOutputParser
 
 if "chat_history" not in st.session_state:
@@ -27,30 +27,62 @@ st.title("Study AI")
 
 
 
-system_prompt = """
-You are an AI assistant tasked with providing detailed answers based solely on the given context. Your goal is to analyze the information provided and formulate a comprehensive, well-structured response to the question.
+system_qa_prompt = """
+You are an assistant for question-answering tasks.
 
-context will be passed as "Context:"
-user question will be passed as "Question:"
+Use the following documents that is retrieved from the database is relevant \
+use it to provide a complete and concise response to the user's query. \
+Do not mention references, sources, or citations in your response
 
-To answer the question:
-1. Thoroughly analyze the context, identifying key information relevant to the question.
-2. Organize your thoughts and plan your response to ensure a logical flow of information.
-3. Formulate a detailed answer that directly addresses the question, using only the information provided in the context.
-4. Ensure your answer is comprehensive, covering all relevant aspects found in the context.
-5. If the context doesn't contain sufficient information to fully answer the question, state this clearly in your response.
-
-Format your response as follows:
-1. Use clear, concise language.
-2. Organize your answer into paragraphs for readability.
-3. Use bullet points or numbered lists where appropriate to break down complex information.
-4. If relevant, include any headings or subheadings to structure your response.
-5. Ensure proper grammar, punctuation, and spelling throughout your answer.
-
-IMPORTANT:L Do not mention references, sources, or citations in your response. There is no need to reference the context in your response.
 If the documents provided are not relevant to the question, use your own knowledge to answer.
 
+Limit your answer to 3-4 sentences.
+
 """
+
+system_qr_prompt = """
+You are an expert at reformulating questions. \
+Your reformulated questions are understandable for high students and teachers.
+The question you reformulate will begin and end with with ’**’. 
+
+If the question is already simple, you can reply with the same question. Otherwise, only \
+reply using a simpler and complete sentence and only give the answer in the following format:
+    **Question**"""
+
+def rewrite_query(query: str):
+
+    llm = ChatOllama(model="llama3.1")
+
+    rewrite_prompt_template = ChatPromptTemplate([
+        ("system", system_qr_prompt),
+        ("user", f" Question: {query}")
+    ])
+
+    chain = rewrite_prompt_template | llm | StrOutputParser()
+
+    response = chain.invoke({
+        "question" : query
+    })
+
+    print(response)
+
+    return response 
+
+def rewritten_query_parser(query: str, delimiter="**"):
+    # Strip leading and trailing spaces
+    input_string = input_string.strip()
+    
+    # Check if the delimiters are present
+    start = input_string.find(delimiter)
+    if start == -1:
+        return ""
+    
+    end = input_string.find(delimiter, start + len(delimiter))
+    if end == -1:
+        return ""
+    
+    # Extract and return the text between the delimiters
+    return input_string[start + len(delimiter):end].strip()
 
 def process_document(file_uploaded: UploadedFile) -> list[Document]:
     # Store uploaded file as a temp file
@@ -77,11 +109,6 @@ def get_collection():
 
     chroma_client = chromadb.PersistentClient(path="./hsc-llm")
 
-    # chroma_client.get_or_create_collection(
-    #     name="biology_collection", 
-    #     embedding_function=embedding_model,
-    #     metadata={"hnsw:space": "cosine"})
-
     return Chroma(
         client=chroma_client,
         collection_name="biology_collection",
@@ -104,20 +131,18 @@ def perform_retrieval(query: str, n = 10):
     collection = get_collection()
     retriever = collection.as_retriever(search_type="similarity", search_kwargs={"k": n})
     results = retriever.invoke(query)
-    # print(results)
-    # print(type(results))
     return results
 
 def get_response(context: str, prompt: str):
     
-    llm = ChatOllama(model="llama3:latest")
+    llm = ChatOllama(model="llama3.1")
 
-    prompt_template = ChatPromptTemplate([
-        ("system", system_prompt),
+    qa_prompt_template = ChatPromptTemplate([
+        ("system", system_qa_prompt),
         ("user", f"Context: {context}, Question: {prompt}")
     ])
 
-    chain = prompt_template | llm | StrOutputParser()
+    chain = qa_prompt_template | llm | StrOutputParser()
 
     return chain.invoke({
         "prompt": prompt, 
@@ -132,7 +157,7 @@ def reranker(prompt: str, documents: list[str]) -> tuple[str,list[int]]:
     relevant_text = ""
     relevant_text_ids = []
     encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-    ranks = encoder_model.rank(prompt, document_texts, top_k=3)
+    ranks = encoder_model.rank(prompt, document_texts, top_k=5)
     for rank in ranks:
         relevant_text += document_texts[rank["corpus_id"]]
         relevant_text_ids.append(rank["corpus_id"])
@@ -167,11 +192,17 @@ if __name__ == "__main__":
             st.markdown(user_query)
 
         with st.chat_message("AI"):
+            # without rewrite
             results = perform_retrieval(user_query)
-
             relevant_text, relevant_text_ids = reranker(user_query, results)
             response = get_response(context=relevant_text, prompt=user_query)
             st.write(response)
+
+            # #with rewrite
+            # rewritten_query = rewrite_query(user_query)
+            # relevant_text, relevant_text_ids = reranker(rewritten_query, results)
+            # response = get_response(context=relevant_text, prompt=rewritten_query)
+            # st.write(response)
             
             with st.expander("See retrieved documents"):
                 st.write(results)
