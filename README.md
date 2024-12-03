@@ -38,7 +38,7 @@ To clone and run this application, you'll need [Git](https://git-scm.com) and [O
 Make sure to download the relevant models using Ollama and the command line.
 
 ```bash
-#Download Meta Llama3.1:8b, Llama3.2-1b and Google Gemma2:9b
+# Download Meta Llama3.1:8b, Llama3.2-1b and Google Gemma2:9b
 $ ollama pull llama3.1:8b
 
 $ ollama pull llama3.2:1b
