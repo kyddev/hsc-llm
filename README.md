@@ -33,7 +33,7 @@
 
 ## How To Use
 
-To clone and run this application, you'll need [Git](https://git-scm.com) and [Ollama](https://ollama.com/) and [Anaconda](https://www.anaconda.com/download/) installed on your computer. 
+To clone and run this application, you'll need [Git](https://git-scm.com), [Ollama](https://ollama.com/) and [Anaconda](https://www.anaconda.com/download/) installed on your computer. 
 
 Make sure to download the relevant models using Ollama and the command line.
 
