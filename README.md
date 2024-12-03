@@ -10,7 +10,7 @@
   <a href="#key-features">Key Features</a> •
   <a href="#how-to-use">How To Use</a> •
   <a href="#how-to-upload-an-entire-directory-of-documents">How to Upload</a> •
-  <a href="#how-to-evaluate">How to Evaluate</a> •
+  <a href="#how-to-evaluate-the-model">How to Evaluate</a> •
   <a href="#license">License</a>
 </p>
 
@@ -33,7 +33,21 @@
 
 ## How To Use
 
-To clone and run this application, you'll need [Git](https://git-scm.com) and [Ollama](https://ollama.com/) and [Anaconda](https://www.anaconda.com/download/) installed on your computer. From your command line:
+To clone and run this application, you'll need [Git](https://git-scm.com) and [Ollama](https://ollama.com/) and [Anaconda](https://www.anaconda.com/download/) installed on your computer. 
+
+Make sure to download the relevant models using Ollama and the command line.
+
+```bash
+#Download Meta Llama3.1:8b, Llama3.2-1b and Google Gemma2:9b
+$ ollama pull llama3.1:8b
+
+$ ollama pull llama3.2:1b
+
+$ ollama pull gemma2:9b
+
+```
+
+Next, from your command line:
 
 ```bash
 
