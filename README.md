@@ -17,7 +17,8 @@
 
 <!-- ![screenshot](https://raw.githubusercontent.com/amitmerchant1990/electron-markdownify/master/app/img/markdownify.gif) -->
 
-This is a project submitted as a Bachelor of Computing Science (Honours) thesis. 
+> **Note**
+> This is a project submitted as a Bachelor of Computing Science (Honours) thesis. 
 
 ## Key Features
 
